@@ -1,6 +1,6 @@
 'use strict';
 
-var cacheVersion = ' speedo_cache_version_0001';
+var cacheVersion = ' speedo_cache_version_0002';
 var currentCache = {
   offline: 'offline-cache' + cacheVersion
 };

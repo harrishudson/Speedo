@@ -15,287 +15,340 @@ html, body { height: 100%; width: 100% }
 </head>
 
 <body id="bd">
-<svg width="100%" height="100%" viewBox="0 0 30 20">
- <text id="h" x="15" y="3.5" font-size="3" fill="black" opacity="0" text-anchor="middle">HUD Mode</text>
- <text id="s" x="15" y="15" font-size="100%" fill="blue" stroke="none" text-anchor="middle" transform="">??</text>
-</svg>
+ <svg width="100%" height="100%" viewBox="0 0 30 20" pointer-events="none">
+  <text id="h" x="15" y="3.5" font-size="3" fill="black" opacity="0" text-anchor="middle" pointer-events="none">HUD Mode</text>
+  <text id="s" x="15" y="15" font-size="100%" fill="blue" stroke="none" text-anchor="middle" transform="" pointer-events="none">??</text>
+ </svg>
 
 <script>
 "use strict";
 
- // Add manifest if not called in file context
- if (window.location.protocol!='file:')
-  document.head.innerHTML+='<link rel="manifest" href="speedo.webmanifest" crossorigin="annonymous"/>';
+// Add manifest if not called in file context
+if (window.location.protocol!='file:')
+ document.head.innerHTML+='<link rel="manifest" href="speedo.webmanifest" crossorigin="annonymous"/>';
 
- // Setup for offline use
- if ('serviceWorker' in navigator) {
-  try {
-   navigator.serviceWorker.register('speedo_service_worker.js').catch(function(e) { 
-    console.info('Info Only - Failed to register service worker; speedo_service_worker.js');});
-      } catch(e) { console.info('Info Only - Failed to register service worker; speedo_service_worker.js'); }
+// Setup for offline use
+if ('serviceWorker' in navigator) {
+ try {
+  navigator.serviceWorker.register('speedo_service_worker.js').catch(function(e) {
+   console.info('Info Only - Failed to register service worker; speedo_service_worker.js') });
+     } catch(e) { console.info('Info Only - Failed to register service worker; speedo_service_worker.js') }
+}
+ 
+var gGEOLOCATION_THROTTLE=false
+var gORIENTATION_THROTTLE=false
+var gHUD_MODE=false
+var gHUD_WARNING_TOGGLE=true
+var gTHE_COLOR="blue"
+var gCLICK_LATCH=0
+var gALLOW_WARNING_VOICE=true
+var gWARNING_LIMIT=null
+var gWARNING_THROTTLE=false
+var gGUESSED_UNITS='kmh'
+
+function show_speed(the_speed) {
+ try {
+  the_speed = parseInt(the_speed)
+ } catch(e) {
+  the_speed = '??'
  }
+ var s=document.querySelector("#s");
+ if (!gHUD_MODE)
+  s.setAttribute("fill",gTHE_COLOR);
+ s.innerHTML=the_speed;
+}
+ 
+var t=navigator.geolocation.watchPosition(
+ geoupdate,
+ geofailure,
+ {enableHighAccuracy: true})
+ 
+function geoupdate(e) {
 
- var gGEOLOCATION_THROTTLE=false
- var gORIENTATION_THROTTLE=false
- var gHUD_WARNING_TOGGLE=true
- var gTHE_COLOR="blue"
- var gCLICK_LATCH=0
- var gALLOW_WARNING_VOICE=true
- var gWARNING_LIMIT=null
- var gWARNING_THROTTLE=false
+ if (gGEOLOCATION_THROTTLE) return;
+ gGEOLOCATION_THROTTLE=true;
+ window.setTimeout(function(){gGEOLOCATION_THROTTLE=false;},200);
 
- function show_speed(s) {
-  var x=document.querySelector("#s");
-  x.innerHTML=s;
- };
+ var s=e.coords.speed;
+ var the_speed;
 
- var t=navigator.geolocation.watchPosition(
-  geoupdate,
-  geofailure,
-  {enableHighAccuracy: true});
+ if (e.coords.latitude < 0)
+  gGUESSED_UNITS='kmh'
+ else
+  gGUESSED_UNITS='mph'
+ 
+ var the_units = localStorage['UNITS'] || gGUESSED_UNITS
 
- function geoupdate(e) {
-
-  if (gGEOLOCATION_THROTTLE) return;
-  gGEOLOCATION_THROTTLE=true;
-  window.setTimeout(function(){gGEOLOCATION_THROTTLE=false;},200);
-
-  var s=e.coords.speed;
-  
-  var the_speed;
-  if (e.coords.latitude < 0) {
-   gTHE_COLOR="blue";
-   the_speed=parseInt(s*3.6);  //kmh
-  }
-  else {
-   gTHE_COLOR="green";
-   the_speed=parseInt(s*2.236936); //mph
-  }
-
-  show_speed(the_speed);
-
-  if ((gWARNING_LIMIT != null) && (the_speed > gWARNING_LIMIT))
-   announce_warning(the_speed)
-
-  };
-
- function announce() {
-  var x=document.querySelector("#s");
-  gALLOW_WARNING_VOICE=false
-  speak(x.innerHTML, function() { gALLOW_WARNING_VOICE=true; });
+ if (the_units == 'mph') {
+  gTHE_COLOR="darkgreen";
+  the_speed=parseInt(s*2.236936); //mph
  }
-
- function announce_warning(the_speed) {
-  if (!gALLOW_WARNING_VOICE) return
-
-  if (gWARNING_THROTTLE) return
-  gWARNING_THROTTLE=true
-  window.setTimeout(function(){ gWARNING_THROTTLE=false }, 10000)
-
-  speak('Warning '+the_speed.toString())
- }
-
- function geofailure(e) {
-  show_speed('??');
-  console.log('Geolocation error ...')
-  console.log(e)
- };
-
- function remove_hud_warning() {
-  var h = document.querySelector("#h");
-  h.setAttribute("opacity","0");
- }
-
- function show_hud_warning() {
-  var h = document.querySelector("#h");
-  h.setAttribute("opacity","1");
-  window.setTimeout(remove_hud_warning,600);
- }
-
- function handleOrientation(e) {
-
-  if (gORIENTATION_THROTTLE) return;
-  gORIENTATION_THROTTLE=true;
-  window.setTimeout(function(){gORIENTATION_THROTTLE=false;},200);
-
-  var b = Math.abs(event.beta);
-  var g = Math.abs(event.gamma);
-
-  if ((!b)&&(!g))
-   return;
-
-  var s = document.querySelector("#s");
-  var bd = document.querySelector("#bd");
-  if ((b < 18) && (g < 18)) {
-   // HUD mode
-   s.setAttribute("transform","scale(1,-1) translate(0,-20)");
-   s.setAttribute("fill","black");
-   bd.style.backgroundColor="white";
-   //HUD warning
-   if (gHUD_WARNING_TOGGLE) {
-    gHUD_WARNING_TOGGLE=false;
-    show_hud_warning();
-    }
-   }
-  else {
-   // Non HUD mode
-   s.setAttribute("transform","");
-   //s.setAttribute("fill","blue");
-   s.setAttribute("fill",gTHE_COLOR);
-   bd.style.backgroundColor="lightgrey";
-   gHUD_WARNING_TOGGLE=true;
-   remove_hud_warning();
-  };
-
- }
-
- function check_latch() {
-  if (gCLICK_LATCH==1) {
-   console.log('Single Click')
-   announce();
-  }
-  if (gCLICK_LATCH==2) {
-   console.log('Double Click')
-   ask_for_limit();
-  }
-  clear_latch()
+ else {
+  gTHE_COLOR="blue";
+  the_speed=parseInt(s*3.6);  //kmh
  }
  
- function clear_latch() {
-  console.log('Clear Latch')
-  gCLICK_LATCH=0
+ show_speed(the_speed);
+
+ if ((gWARNING_LIMIT != null) && (the_speed > gWARNING_LIMIT))
+  announce_warning(the_speed)
+}
+
+function announce() {
+ var x=document.querySelector("#s");
+ var blurb=x.innerHTML
+ if (blurb=='??') blurb='Unknown'
+ gALLOW_WARNING_VOICE=false
+ speak(blurb, function() { gALLOW_WARNING_VOICE=true } );
+}
+ 
+function announce_warning(the_speed) {
+ if (!gALLOW_WARNING_VOICE) return
+
+ if (gWARNING_THROTTLE) return
+ gWARNING_THROTTLE=true
+ window.setTimeout(function(){ gWARNING_THROTTLE=false }, 10000)
+
+ speak('Warning '+the_speed.toString())
+}
+ 
+function geofailure(e) {
+ show_speed('??');
+ console.log('Geolocation error ...')
+ console.log(e)
+}
+ 
+function remove_hud_warning() {
+ var h=document.querySelector("#h");
+ h.setAttribute("opacity","0");
+}
+ 
+function show_hud_warning() {
+ var h=document.querySelector("#h");
+ h.setAttribute("opacity","1");
+ window.setTimeout(remove_hud_warning,600);
+}
+ 
+function handleOrientation(e) {
+
+ if (gORIENTATION_THROTTLE) return;
+ gORIENTATION_THROTTLE=true;
+ window.setTimeout(function(){gORIENTATION_THROTTLE=false;},200);
+
+ var b=Math.abs(event.beta);
+ var g=Math.abs(event.gamma);
+
+ if ((!b)&&(!g))
+  return;
+
+ var s=document.querySelector("#s");
+ var bd=document.querySelector("#bd");
+ if ((b < 18) && (g < 18)) {
+  // HUD mode
+  gHUD_MODE=true
+  s.setAttribute("transform","scale(1,-1) translate(0,-20)");
+  s.setAttribute("fill","black");
+  bd.style.backgroundColor="white";
+  //HUD warning
+  if (gHUD_WARNING_TOGGLE) {
+   gHUD_WARNING_TOGGLE=false;
+   show_hud_warning();
+  }
+ } else {
+  // Non HUD mode
+  gHUD_MODE=false
+  s.setAttribute("transform","");
+  //s.setAttribute("fill","blue");
+  s.setAttribute("fill",gTHE_COLOR);
+  bd.style.backgroundColor="lightgrey";
+  gHUD_WARNING_TOGGLE=true;
+  remove_hud_warning();
  }
- 
- function set_latch(e) {
-  gCLICK_LATCH++
-  e.preventDefault()
-  window.setTimeout(check_latch, 700)
-  window.setTimeout(clear_latch, 1400)
+}
+
+function check_latch() {
+ if (gCLICK_LATCH==1) {
+  console.log('Single Click')
+  announce();
  }
+ if (gCLICK_LATCH==2) {
+  console.log('Double Click')
+  ask_for_limit();
+ }
+ if (gCLICK_LATCH==3) {
+  console.log('Triple Click')
+  ask_for_unit_change();
+ }
+ clear_latch()
+}
+
+function clear_latch() {
+ console.log('Clear Latch')
+ gCLICK_LATCH=0
+}
+
+function set_latch(e) {
+ gCLICK_LATCH++
+ e.preventDefault()
+ window.setTimeout(check_latch, 700)
+ window.setTimeout(clear_latch, 1400)
+}
+
+function ask_for_limit() {
+
+ gWARNING_LIMIT=null
+ gALLOW_WARNING_VOICE=false
+
+ ask('What speed limit warning value?', function (end, result) {
+  if (end) {
+   if (gWARNING_LIMIT != null) {
+    speak('Setting speed warning to '+gWARNING_LIMIT.toString(), function() {gALLOW_WARNING_VOICE=true});
+    console.log('Speed limit warning = '+gWARNING_LIMIT.toString())
+   } else
+    speak('Speed warning turned off.', function() {gALLOW_WARNING_VOICE=true});
+  }
  
- function ask_for_limit() {
-
-  gWARNING_LIMIT=null
-  gALLOW_WARNING_VOICE=false
-
-  ask('What speed limit warning value?', function (end, result) {
- 
-   if (end) {
-    if (gWARNING_LIMIT != null) {
-     speak('Setting speed warning to '+gWARNING_LIMIT.toString());
-     console.log('Speed limit warning = '+gWARNING_LIMIT.toString())
-     gALLOW_WARNING_VOICE=true
-    }
-   }
-
-   if (result && result.transcript) {
-    try {
-     gWARNING_LIMIT=parseInt(result.transcript)
-    } catch(e) {
-     gWARNING_LIMIT=null
-    }
-   if (isNaN(gWARNING_LIMIT))
+  if (result && result.transcript) {
+   try {
+    gWARNING_LIMIT=parseInt(result.transcript)
+   } catch(e) {
     gWARNING_LIMIT=null
    }
- 
-   });
- }
- 
- function ask(text, callback) {
-   speak(text, function () {
-     // get answer
-     var recognition;
-     try {
-      var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition;
-      recognition = new SpeechRecognition();
-     } catch(e) { return; }
-     recognition.continuous = false;
-     recognition.interimResults = true;
-     //recognition.lang='en-US';
-     //recognition.lang='en-GB';
-     recognition.lang='en-AU';
- 
-     recognition.onend = function (e) {
-      if (callback) {
-       callback('end');
-      }
-     };
-
-     recognition.onresult = function (e) {
-       // cancel onend handler
-       //recognition.onend = null;
-       if (callback) {
-        callback(null, {
-          transcript: e.results[0][0].transcript,
-          confidence: e.results[0][0].confidence
-        });
-      }
-     }
-
-    // start listening
-    recognition.start();
-   });
+  if (isNaN(gWARNING_LIMIT))
+   gWARNING_LIMIT=null
   }
+ })
+}
  
- function speak(text, callback) {
-   try {
-    var u = new SpeechSynthesisUtterance();
-    u.text = text;
-    //u.lang = 'en-US';
-    //u.lang='en-GB';
-    u.lang='en-AU';
-
-    u.onend = function () {
-     if (callback) {
-         callback();
-     }
-    };
-
-   u.onerror = function (e) {
-    if (callback) {
-     callback(e);
-    }
-   };
-
-   speechSynthesis.speak(u);
-  } catch(e) {};
- }
- 
- document.body.addEventListener('click', set_latch)
- window.addEventListener("deviceorientation", handleOrientation, true);
-
- // The wake lock sentinel.
- let wakeLock = null;
-
- // Function that attempts to request a screen wake lock.
- const requestWakeLock = async () => {
-  try {
-    wakeLock = await navigator.wakeLock.request();
-    wakeLock.addEventListener('release', () => {
-      console.log('Screen Wake Lock released:', wakeLock.released);
-    });
-    console.log('Screen Wake Lock released:', wakeLock.released);
-  } catch (err) {
-    console.error(`${err.name}, ${err.message}`);
-  }
- };
-
- // Request a screen wake lock…
- requestWakeLock();
-
- // Re-request after visibility change
- document.addEventListener('visibilitychange', async () => {
-  if (wakeLock !== null && document.visibilityState === 'visible') {
-   requestWakeLock();
+function ask_for_unit_change() {
+ var the_units=localStorage['UNITS']||gGUESSED_UNITS
+ let new_units=toggle_units(the_units)
+ gALLOW_WARNING_VOICE=false
+ let the_question='To change units to '+new_units.literal+', now say, change'
+ var units_response=null
+ ask(the_question, function (end, result) {
+  if (end) {
+   if (units_response == 'change') {
+    speak('Changing units to '+new_units.literal, function() {gALLOW_WARNING_VOICE=true})
+    console.log('Changing units to '+new_units.literal)
+    localStorage['UNITS']=new_units.units
+   } else {
+    speak('Leaving Units unchanged as '+toggle_units(toggle_units(the_units).units).literal, function() {gALLOW_WARNING_VOICE=true})
    }
- });
+  }
 
- // and release it again after 5s.
- //window.setTimeout(() => {
- //  wakeLock.release();
- //  wakeLock = null;
- //}, 5000);
+  if (result && result.transcript) {
+   try {
+    units_response=result.transcript.split(' ')[0].toLowerCase();  //Get first word only lower case
+   } catch(e)  {
+    units_response=null;
+   }
+  }
+ 
+ })
+}
+ 
+function ask(text, callback) {
+ speak(text, function () {
+  // get answer
+  var recognition;
+  try {
+   var SpeechRecognition = SpeechRecognition || webkitSpeechRecognition;
+   recognition = new SpeechRecognition();
+  } catch(e) { return; }
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  //recognition.lang='en-US';
+  //recognition.lang='en-GB';
+  recognition.lang='en-AU';
+  recognition.onend = function (e) {
+   if (callback) {
+    callback('end');
+   }
+  }
 
+ recognition.onresult = function (e) {
+  // cancel onend handler
+  //recognition.onend = null;
+  if (callback) {
+   callback(null, {
+    transcript: e.results[0][0].transcript,
+    confidence: e.results[0][0].confidence
+   })
+  }
+ }
+ 
+ // start listening
+ recognition.start();
+ })
+}
+
+function speak(text, callback) {
+ try {
+  var u = new SpeechSynthesisUtterance();
+  u.text = text;
+  //u.lang = 'en-US';
+  //u.lang='en-GB';
+  u.lang='en-AU';
+
+  u.onend = function () {
+   if (callback) {
+       callback();
+   }
+  }
+ 
+  u.onerror = function (e) {
+   if (callback) {
+    callback(e);
+   }
+  }
+ 
+  speechSynthesis.speak(u);
+ } catch(e) {}
+}
+
+function toggle_units(the_units) {
+ if (the_units=='mph')
+  return {units:'kmh', literal:'kilometers per hour'}
+ else
+  return {units:'mph', literal:'miles per hour'}
+}
+
+document.body.addEventListener('click', set_latch)
+window.addEventListener("deviceorientation", handleOrientation, true);
+
+// The wake lock sentinel.
+let wakeLock = null;
+
+// Function that attempts to request a screen wake lock.
+const requestWakeLock = async () => {
+ try {
+   wakeLock = await navigator.wakeLock.request();
+   wakeLock.addEventListener('release', () => {
+     console.log('Screen Wake Lock released:', wakeLock.released);
+   })
+   console.log('Screen Wake Lock released:', wakeLock.released);
+ } catch (err) {
+   console.error(`${err.name}, ${err.message}`);
+ }
+}
+ 
+// Request a screen wake lock…
+requestWakeLock();
+ 
+// Re-request after visibility change
+document.addEventListener('visibilitychange', async () => {
+ if (wakeLock !== null && document.visibilityState === 'visible') {
+  requestWakeLock();
+  }
+ })
+ 
+// and release it again after 5s.
+//window.setTimeout(() => {
+//  wakeLock.release();
+//  wakeLock = null;
+//}, 5000);
+ 
 </script>
 </body>
 </html>
