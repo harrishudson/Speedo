@@ -1,6 +1,7 @@
 # Speedo
 Speedometer (with HUD mode and limit warning) by Harris Hudson.
- 
+
+![Screenshot](https://harrishudson.com/github/speedo_snapshot1.png)
 
 ## Demo
 Speedo: [https://harrishudson.com/speedo/](https://harrishudson.com/speedo/).
